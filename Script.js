@@ -16,8 +16,6 @@ const EXAMPLE_TITLE = "Ejemplo.";
 
 // ====== OVERRIDES OPCIONALES (si quieres forzar una URL concreta) ======
 const FLAG_BY_TITLE = {
-  // Deja vacío para usar el buscador automático de Commons,
-  // o sobreescribe alguna bandera así:
   // "Bogotá, D.C.": commons("Flag of Bogotá.svg"),
 };
 
@@ -193,35 +191,20 @@ function getPieceCenterScreen(it){
   return {x:(L+R)/2,y:(T+B)/2};
 }
 
-// ---------- Helpers para EJEMPLO obligatorio ----------
+// ---------- Helpers para EJEMPLO (solo bloqueo, sin más) ----------
 function getExampleItem(){ return state.items.find(it=>it.title === EXAMPLE_TITLE); }
 function isExamplePlaced(){ const ex=getExampleItem(); return ex ? !!ex.placed : true; }
-
-// CREA/ENFOCA el “Ejemplo.” automáticamente
-function focusExample(){
-  const ex = getExampleItem();
-  if (!ex) return false;
-  if (!ex.nodes.length) { spawnPiece(ex, 0); } // lo crea si aún no existe
-  focusPiece(ex);
-  const card = state.tileByTitle.get(EXAMPLE_TITLE);
-  if (card) card.scrollIntoView({behavior:'smooth', block:'nearest'});
-  return true;
-}
-
-/**
- * BLOQUEA cualquier acción mientras el Ejemplo no esté colocado.
- * Permite siempre operar sobre el propio Ejemplo.
- */
+// No auto-crear ni auto-enfocar el ejemplo
+function focusExample(){ return false; }
+// Solo decide si se debe bloquear (el mensaje se muestra fuera)
 function blockIfExamplePending(candidateIt){
-  if (candidateIt && candidateIt.title === EXAMPLE_TITLE) return false; // permitir el ejemplo
-  if (isExamplePlaced()) return false; // si ya está puesto, no bloquear
-  focusExample();                      // enfoca/crea el ejemplo
-  return true;                         // BLOQUEA
+  if (candidateIt && candidateIt.title === EXAMPLE_TITLE) return false; // permitir operar el Ejemplo
+  if (isExamplePlaced()) return false;                                  // si ya está, no bloquear
+  return true;                                                          // bloquear lo demás
 }
 
 // ===================== ALERTAS (ventanas emergentes) =====================
 function showAlert(message){
-  // Delay mínimo para evitar conflictos con pointer events
   setTimeout(()=>{ try{ window.alert(message); }catch(_){ console.log("[ALERT]", message); } }, 30);
 }
 
@@ -339,8 +322,8 @@ async function loadSVG(){
 
     renderSidebar();
 
-    // Forzar a empezar por el ejemplo (lo crea y enfoca)
-    focusExample();
+    // No auto-enfocar ni auto-crear el Ejemplo
+    // focusExample();
 
     enableDrag();
     updateTopHud();
@@ -471,7 +454,7 @@ function renderSidebar(){
     const btn=document.createElement('button');
     btn.textContent=it.nodes.length?'Enfocar':'Colocar';
     btn.onclick=()=>{
-      // Bloqueo si el ejemplo no está completo (salvo que se trate del propio Ejemplo)
+      // Bloqueo si el ejemplo no está completo (salvo que sea el propio Ejemplo)
       if (blockIfExamplePending(it)) {
         showAlert("Primero completa el Ejemplo para poder continuar con los demás departamentos.");
         return;
@@ -485,7 +468,7 @@ function renderSidebar(){
     div.appendChild(left); div.appendChild(btn); box.appendChild(div);
     state.tileByTitle.set(it.title, div);
 
-    // Bandera remota como fondo (no bloquea si falla)
+    // Bandera remota como fondo
     applyFlagBackground(div, it.title);
   });
 
@@ -563,7 +546,7 @@ function enableDrag(){
     const path=e.target.closest('path.leaflet-path-draggable'); if(!path) return;
     const rec=state.items.find(it=>it.nodes.includes(path)); if(!rec||rec.placed) return;
 
-    // Bloquea arrastre si el ejemplo no está completo (salvo el propio Ejemplo)
+    // Bloqueo si el Ejemplo no está completo (salvo el propio Ejemplo)
     if (blockIfExamplePending(rec)) {
       showAlert("Primero completa el Ejemplo para poder continuar con los demás departamentos.");
       return;
@@ -603,13 +586,7 @@ function enableDrag(){
 
       try{ state.sndGood && (state.sndGood.currentTime=0, state.sndGood.play()); }catch(_){}
 
-      // Alerta especial cuando se completa el Ejemplo
-      if (current.title === EXAMPLE_TITLE && !state.exampleAlertShown) {
-        state.exampleAlertShown = true;
-        showAlert("Gracias por hacer el ejemplo, asi deben quedar todos los departamentos para completar el mapa");
-      }
-
-      // Mensaje especial para Bogotá (texto corregido)
+      // Mensaje para Bogotá (corregido)
       if (current.title === "Bogotá, D.C.") {
         showAlert("Bogotá, D.C. no es un departamento; es la capital de Colombia (Distrito Capital).");
       }
@@ -647,27 +624,21 @@ function onFilterChange(e){
 
 // ===================== BOTONES / INICIO =====================
 window.addEventListener('DOMContentLoaded', ()=>{
-  // Botón de ayuda → ventana emergente
   const howBtn = $('#howBtn');
   if (howBtn) howBtn.onclick = showHowItWorks;
 
-  // Eliminar cualquier .hint que viniera en el HTML
   const listWrap = document.querySelector('.list');
   if (listWrap) { [...listWrap.querySelectorAll('.hint')].forEach(n => n.remove()); }
 
-  // Reiniciar
   const resetBtn = $('#resetBtn');
   if (resetBtn) resetBtn.onclick = ()=>location.reload();
 
-  // Resultados (se habilita al completar)
   const resultsBtn = $('#resultsBtn');
   if (resultsBtn) resultsBtn.onclick = showResults;
 
-  // Filtro de la lista
   const filterInput = $('#filterInput');
   if (filterInput) filterInput.addEventListener('input', onFilterChange);
 
-  // Sonidos
   state.sndGood = document.getElementById('soundGood');
   state.sndBad  = document.getElementById('soundBad');
 
