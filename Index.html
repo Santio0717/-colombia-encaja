@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#0ea5e9" />
+  <title>Puzzle de Departamentos de Colombia</title>
+
+  <!-- CSS (cache-busting) -->
+  <link rel="stylesheet" href="./Style.css?v=14" />
+
+  <!-- Sugerido (acelera carga de banderas desde Commons) -->
+  <link rel="preconnect" href="https://commons.wikimedia.org" crossorigin>
+  <link rel="preconnect" href="https://upload.wikimedia.org" crossorigin>
+
+  <!-- JS (cache-busting) -->
+  <script src="./Script.js?v=14" defer></script>
+</head>
+<body>
+  <noscript>Activa JavaScript para jugar el rompecabezas.</noscript>
+
+  <div class="bar">
+    <button id="howBtn" title="Ver ayuda">¿Cómo funciona?</button>
+    <button id="resetBtn" title="Reiniciar progreso">Reiniciar</button>
+
+    <!-- Botón de resultados (habilitado por JS al completar) -->
+    <button id="resultsBtn" title="Ver resultados" disabled>Resultados</button>
+
+    <span class="score">
+      <span id="hud" aria-live="polite">Fichas: 0 / 0 — Puntuación: 0 / 0</span>
+    </span>
+  </div>
+
+  <div id="boardWrap">
+    <div id="board"></div>
+  </div>
+
+  <aside class="sidebar">
+    <div class="list">
+      <div class="search">
+        <input id="filterInput" type="search" placeholder="Filtrar departamentos…" aria-label="Filtrar" />
+      </div>
+      <div id="tiles"></div>
+    </div>
+  </aside>
+
+  <!-- Modal accesible (JS lo muestra/oculta) -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal__backdrop" data-close></div>
+    <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <h3 id="modalTitle"></h3>
+      <p id="modalText"></p>
+      <div class="modal__actions">
+        <button id="modalOk">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Canvas para efectos (confetti/partículas) -->
+  <canvas id="fx" class="fx" aria-hidden="true"></canvas>
+
+  <!-- Sonidos -->
+  <audio id="soundGood" src="./Sounds/Correcto.mp3" preload="auto"></audio>
+  <audio id="soundBad"  src="./Sounds/Error.mp3"   preload="auto"></audio>
+
+  <!-- Toaster (se inyecta por JS si no existe) -->
+  <div id="toaster" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
