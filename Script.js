@@ -113,6 +113,9 @@ const state = {
 const $ = s => document.querySelector(s);
 
 // ===================== HUD (encabezado superior) =====================
+function totalPlayable(){ return state.items.length; }
+function placedCount(){ return state.items.filter(it => it.placed).length; }
+
 function updateTopHud(){
   const placed = placedCount();
   const total  = totalPlayable();
@@ -189,10 +192,6 @@ function getPieceCenterScreen(it){
   const R=Math.max(...rs.map(r=>r.right)),B=Math.max(...rs.map(r=>r.bottom));
   return {x:(L+R)/2,y:(T+B)/2};
 }
-
-// ===================== CÓMPUTO DE CONTADORES (excluye Ejemplo del total) =====================
-function totalPlayable(){ return state.items.filter(it=>it.title!==EXAMPLE_TITLE).length; }
-function placedCount(){ return state.items.filter(it=>it.title!==EXAMPLE_TITLE && it.placed).length; }
 
 // ---------- Helpers para EJEMPLO obligatorio ----------
 function getExampleItem(){ return state.items.find(it=>it.title === EXAMPLE_TITLE); }
@@ -305,7 +304,7 @@ async function loadSVG(){
     });
     document.body.removeChild(tmp2); document.body.removeChild(tmp);
 
-    // Inserta “Ejemplo.” si no existe
+    // Inserta “Ejemplo.” si no existe (como pieza normal)
     if (!arr.some(x=>x.title===EXAMPLE_TITLE)) {
       arr.unshift({
         title: EXAMPLE_TITLE,
@@ -472,7 +471,7 @@ function renderSidebar(){
     const btn=document.createElement('button');
     btn.textContent=it.nodes.length?'Enfocar':'Colocar';
     btn.onclick=()=>{
-      // Bloqueo si el ejemplo no está completo
+      // Bloqueo si el ejemplo no está completo (salvo que se trate del propio Ejemplo)
       if (blockIfExamplePending(it)) {
         showAlert("Primero completa el Ejemplo para poder continuar con los demás departamentos.");
         return;
@@ -564,7 +563,7 @@ function enableDrag(){
     const path=e.target.closest('path.leaflet-path-draggable'); if(!path) return;
     const rec=state.items.find(it=>it.nodes.includes(path)); if(!rec||rec.placed) return;
 
-    // Bloquea arrastre si el ejemplo no está completo
+    // Bloquea arrastre si el ejemplo no está completo (salvo el propio Ejemplo)
     if (blockIfExamplePending(rec)) {
       showAlert("Primero completa el Ejemplo para poder continuar con los demás departamentos.");
       return;
@@ -604,7 +603,13 @@ function enableDrag(){
 
       try{ state.sndGood && (state.sndGood.currentTime=0, state.sndGood.play()); }catch(_){}
 
-      // Mensaje especial únicamente para Bogotá (texto corregido)
+      // Alerta especial cuando se completa el Ejemplo
+      if (current.title === EXAMPLE_TITLE && !state.exampleAlertShown) {
+        state.exampleAlertShown = true;
+        showAlert("Gracias por hacer el ejemplo, asi deben quedar todos los departamentos para completar el mapa");
+      }
+
+      // Mensaje especial para Bogotá (texto corregido)
       if (current.title === "Bogotá, D.C.") {
         showAlert("Bogotá, D.C. no es un departamento; es la capital de Colombia (Distrito Capital).");
       }
