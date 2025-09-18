@@ -113,6 +113,9 @@ const state = {
 const $ = s => document.querySelector(s);
 
 // ===================== HUD (encabezado superior) =====================
+function totalPlayable(){ return state.items.length; }
+function placedCount(){ return state.items.filter(it => it.placed).length; }
+
 function updateTopHud(){
   const placed = placedCount();
   const total  = totalPlayable();
@@ -190,33 +193,12 @@ function getPieceCenterScreen(it){
   return {x:(L+R)/2,y:(T+B)/2};
 }
 
-function totalPlayable(){ return state.items.filter(it=>it.title!==EXAMPLE_TITLE).length; }
-function placedCount(){ return state.items.filter(it=>it.title!==EXAMPLE_TITLE && it.placed).length; }
-
-// ---------- Helpers para EJEMPLO obligatorio ----------
+// ---------- Helpers para EJEMPLO (ya no se tratan distinto) ----------
 function getExampleItem(){ return state.items.find(it=>it.title === EXAMPLE_TITLE); }
 function isExamplePlaced(){ const ex=getExampleItem(); return ex ? !!ex.placed : true; }
-
-function focusExample(){
-  const ex = getExampleItem();
-  if (!ex) return false;
-  if (!ex.nodes.length) { spawnPiece(ex, 0); }
-  focusPiece(ex);
-  const card = state.tileByTitle.get(EXAMPLE_TITLE);
-  if (card) card.scrollIntoView({behavior:'smooth', block:'nearest'});
-  return true;
-}
-
-/**
- * Devuelve true si DEBE bloquear la acción por no haber completado el Ejemplo.
- * También enfoca el Ejemplo y muestra la alerta (el caller puede decidir si mostrar otra cosa).
- */
-function blockIfExamplePending(candidateIt){
-  if (candidateIt && candidateIt.title === EXAMPLE_TITLE) return false; // permitir siempre el ejemplo
-  if (isExamplePlaced()) return false;
-  focusExample();
-  return true;
-}
+// No hacemos nada especial con el ejemplo
+function focusExample(){ return false; }
+function blockIfExamplePending(_candidateIt){ return false; }
 
 // ===================== ALERTAS (ventanas emergentes) =====================
 function showAlert(message){
@@ -303,7 +285,7 @@ async function loadSVG(){
     });
     document.body.removeChild(tmp2); document.body.removeChild(tmp);
 
-    // Inserta “Ejemplo.” si no existe
+    // Inserta “Ejemplo.” si no existe (como pieza normal)
     if (!arr.some(x=>x.title===EXAMPLE_TITLE)) {
       arr.unshift({
         title: EXAMPLE_TITLE,
@@ -337,8 +319,8 @@ async function loadSVG(){
     $('#board').innerHTML=''; $('#board').appendChild(svg);
 
     renderSidebar();
-    // Sugerir visualmente empezar por el ejemplo
-    focusExample();
+    // Ya no auto-enfocamos/creamos el Ejemplo
+    // focusExample();
 
     enableDrag();
     updateTopHud();
@@ -469,11 +451,7 @@ function renderSidebar(){
     const btn=document.createElement('button');
     btn.textContent=it.nodes.length?'Enfocar':'Colocar';
     btn.onclick=()=>{
-      // Bloqueo si el ejemplo no está completo
-      if (blockIfExamplePending(it)) {
-        showAlert("Primero completa el Ejemplo para poder continuar con los demás departamentos.");
-        return;
-      }
+      // Ya no hay bloqueo por "Ejemplo."
       if(!it.nodes.length){ spawnPiece(it, idx); btn.textContent='Enfocar'; }
       focusPiece(it);
     };
@@ -561,12 +539,6 @@ function enableDrag(){
     const path=e.target.closest('path.leaflet-path-draggable'); if(!path) return;
     const rec=state.items.find(it=>it.nodes.includes(path)); if(!rec||rec.placed) return;
 
-    // Bloquea arrastre si el ejemplo no está completo
-    if (blockIfExamplePending(rec)) {
-      showAlert("Primero completa el Ejemplo para poder continuar con los demás departamentos.");
-      return;
-    }
-
     current=rec; start=toSVG(e);
     base=rec.nodes.map(n=>{ const m=n.transform.baseVal.consolidate(); return m?m.matrix:state.world.createSVGMatrix(); });
     rec.nodes.forEach(n=>n.setPointerCapture(e.pointerId)); focusPiece(rec);
@@ -601,12 +573,9 @@ function enableDrag(){
 
       try{ state.sndGood && (state.sndGood.currentTime=0, state.sndGood.play()); }catch(_){}
 
-      if (current.title === EXAMPLE_TITLE && !state.exampleAlertShown) {
-        state.exampleAlertShown = true;
-        showAlert("¡Completaste el Ejemplo! Así deben quedar las fichas en el rompecabezas.");
-      }
+      // Mensaje especial únicamente para Bogotá (texto corregido)
       if (current.title === "Bogotá, D.C.") {
-        showAlert("Bogotá, D.C. es el Distrito Capital, no un departamento.");
+        showAlert("Bogotá, D.C. no es un departamento; es la capital de Colombia (Distrito Capital).");
       }
 
       const card = state.tileByTitle.get(current.title);
