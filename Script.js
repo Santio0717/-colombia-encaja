@@ -226,6 +226,19 @@ function maybeShowCompletion(){
   }
 }
 
+// ============ RESPONSIVE: ajustar SVG al contenedor en resize ============
+function fitSvgToContainer(){
+  const board = $('#board');
+  if (!board || !state.svg) return;
+  // Asegura que el SVG ocupe el tamaño real del contenedor (evita desajustes de hit-test)
+  const w = board.clientWidth || board.offsetWidth || 0;
+  const h = board.clientHeight || board.offsetHeight || 0;
+  if (w > 0 && h > 0){
+    state.svg.setAttribute('width',  String(w));
+    state.svg.setAttribute('height', String(h));
+  }
+}
+
 // ===================== CARGA DEL SVG =====================
 async function loadSVG(){
   try{
@@ -243,6 +256,8 @@ async function loadSVG(){
 
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
     svg.setAttribute('viewBox', vb.join(' '));
+    svg.style.width = '100%';
+    svg.style.height = '100%';
     state.svg=svg;
 
     const world=document.createElementNS('http://www.w3.org/2000/svg','g');
@@ -322,8 +337,8 @@ async function loadSVG(){
 
     renderSidebar();
 
-    // No auto-enfocar ni auto-crear el Ejemplo
-    // focusExample();
+    // Ajusta SVG al contenedor (útil tras el primer layout)
+    fitSvgToContainer();
 
     enableDrag();
     updateTopHud();
@@ -523,15 +538,36 @@ function targetDiagScreen(it){
   const b=it.targetBBox, s1=worldPointToScreen(b.x,b.y), s2=worldPointToScreen(b.x+b.width,b.y+b.height);
   return Math.hypot(s2.x-s1.x, s2.y-s1.y);
 }
-function snapRadiusFor(it){ const d=targetDiagScreen(it); if(d<60) return 56; if(d<100) return 40; if(d<160) return 28; return 24; }
-function coversTargetArea(current, tgtS){
-  const OFF=[-8,0,8];
-  for(const dx of OFF) for(const dy of OFF){
-    const sx=tgtS.x+dx, sy=tgtS.y+dy;
-    for(const n of current.nodes){
-      if(!n.isPointInFill) continue;
-      const inv=n.getScreenCTM().inverse(), p=_pt(sx,sy).matrixTransform(inv);
-      if(n.isPointInFill(p)) return true;
+function snapRadiusFor(it){
+  const d=targetDiagScreen(it);
+  if(d<60) return 56;
+  if(d<100) return 40;
+  if(d<160) return 28;
+  return 24;
+}
+
+// === Encaje ROBUSTO: muestreo 5x5 dentro del bbox objetivo ===
+function coversTargetArea(current, targetBBox){
+  const COLS = 5, ROWS = 5;
+  const samples = [];
+
+  for (let i = 1; i <= COLS; i++){
+    const fx = i / (COLS + 1);
+    for (let j = 1; j <= ROWS; j++){
+      const fy = j / (ROWS + 1);
+      const wx = targetBBox.x + targetBBox.width  * fx;
+      const wy = targetBBox.y + targetBBox.height * fy;
+      const s  = worldPointToScreen(wx, wy);
+      samples.push({x: s.x, y: s.y});
+    }
+  }
+
+  for (const {x, y} of samples){
+    for (const n of current.nodes){
+      if (!n.isPointInFill) continue;
+      const inv = n.getScreenCTM().inverse();
+      const p   = _pt(x, y).matrixTransform(inv);
+      if (n.isPointInFill(p)) return true;
     }
   }
   return false;
@@ -567,11 +603,15 @@ function enableDrag(){
     if(!current) return;
     try{ current.nodes.forEach(n=>n.releasePointerCapture?.(e.pointerId)); }catch(_){}
 
-    const curS=getPieceCenterScreen(current), tgtS=worldPointToScreen(current.targetCX,current.targetCY);
+    const curS=getPieceCenterScreen(current);
+    const tgtS=worldPointToScreen(current.targetCX,current.targetCY);
     const dxS=tgtS.x-curS.x, dyS=tgtS.y-curS.y;
+
     const tol=Math.max(SNAP_PX_BASE, snapRadiusFor(current));
     const near=Math.hypot(dxS,dyS)<tol;
-    const overlap=coversTargetArea(current, tgtS);
+
+    // ¡Nuevo! usa bbox objetivo para superposición (robusto)
+    const overlap=coversTargetArea(current, current.targetBBox);
 
     if(near && overlap){
       const {dx,dy}=screenDeltaToWorldDelta(dxS,dyS);
@@ -586,7 +626,6 @@ function enableDrag(){
 
       try{ state.sndGood && (state.sndGood.currentTime=0, state.sndGood.play()); }catch(_){}
 
-      // Mensaje para Bogotá (corregido)
       if (current.title === "Bogotá, D.C.") {
         showAlert("Bogotá, D.C. no es un departamento; es la capital de Colombia (Distrito Capital).");
       }
@@ -644,3 +683,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
 
   loadSVG();
 });
+
+// Re-ajusta el tamaño del SVG al cambiar tamaño/orientación (móvil/tablet/pc)
+window.addEventListener('resize',  fitSvgToContainer, {passive:true});
+window.addEventListener('orientationchange', fitSvgToContainer, {passive:true});
