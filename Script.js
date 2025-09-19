@@ -664,6 +664,10 @@ function enableDrag(){
       addScore(GOOD);
 
       try{ state.sndGood && (state.sndGood.currentTime=0, state.sndGood.play()); }catch(_){}
+       // >>> ALERTA ESPECIAL PARA Ejemplo. <<<
+      if (current.title === "Ejemplo.") {
+        showAlert("¡Completaste el ejemplo con éxito! Así deben quedar todas las fichas en el mapa. ¡Vamos, tú puedes completarlo con éxito!");
+      }
 
       // >>> ALERTA ESPECIAL PARA BOGOTÁ <<<
       if (current.title === "Bogotá, D.C.") {
@@ -691,7 +695,6 @@ function enableDrag(){
     current=null; start=null; base=null;
   }, {passive:true});
 }
-
 // ===================== FILTRO DE LISTA =====================
 function onFilterChange(e){
   const q = normalizeKey(e.target.value || "");
@@ -735,4 +738,5 @@ window.addEventListener('DOMContentLoaded', ()=>{
 
   loadSVG();
 });
+
 
