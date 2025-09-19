@@ -401,7 +401,7 @@ function titleVariations(title){
   if (title === "Bogotá, D.C.") {
     ["Bogotá","Bogota","Bogotá DC","Bogota DC","Distrito Capital"].forEach(v=>variants.add(v));
   }
-  if (title === "San Andrés y Providencia") {
+  if (title === "San Andrés, Providencia y Santa Catalina") {
     [
       "San Andrés y Providencia",
       "San Andres y Providencia",
@@ -665,6 +665,11 @@ function enableDrag(){
 
       try{ state.sndGood && (state.sndGood.currentTime=0, state.sndGood.play()); }catch(_){}
 
+      // >>> ALERTA ESPECIAL PARA BOGOTÁ <<<
+      if (current.title === "Bogotá, D.C.") {
+        showAlert("Bogotá, D.C. no es un departamento; es la capital de Colombia (Distrito Capital).");
+      }
+
       const card = state.tileByTitle.get(current.title);
       if (card) card.classList.add('done');
 
@@ -730,3 +735,4 @@ window.addEventListener('DOMContentLoaded', ()=>{
 
   loadSVG();
 });
+
