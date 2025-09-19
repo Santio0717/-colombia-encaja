@@ -666,7 +666,7 @@ function enableDrag(){
       try{ state.sndGood && (state.sndGood.currentTime=0, state.sndGood.play()); }catch(_){}
        // >>> ALERTA ESPECIAL PARA Ejemplo. <<<
       if (current.title === "Ejemplo.") {
-        showAlert("¡Completaste el ejemplo con éxito! Así deben quedar todas las fichas en el mapa. ¡Vamos, tú puedes completarlo con éxito!");
+        showAlert("¡Completaste el Ejemplo con éxito! así deben quedar todas las fichas en el mapa. ¡Vamos, tú puedes completarlo con éxito!");
       }
 
       // >>> ALERTA ESPECIAL PARA BOGOTÁ <<<
@@ -738,5 +738,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
 
   loadSVG();
 });
+
 
 
