@@ -1,20 +1,29 @@
 // ===================== CONFIG =====================
 const SVG_SOURCE = "./Colombia.svg";
+
+// Escala base del SVG dentro del viewBox (el responsive lo manejan viewBox + CSS).
 const SCALE = 0.65;
+
+// Puntuación
 const GOOD = 200, BAD = -100;
 
+// Columna de “spawn” (posición inicial de piezas)
 const PANEL_WORLD_W   = 460;
 const SPAWN_COL_X_PAD = 28;
-
 const SPAWN_ANCHOR_Y_FRAC = 0.45;
 const SPAWN_JITTER_PX = 0;
 
+// Etiqueta en piezas (opcional)
 const SHOW_LABELS_ON_PIECES = false;
-const SNAP_PX_BASE = 16;
 
+// Snap base dinámica (ajustada por dispositivo)
+const SNAP_PX_BASE_DESKTOP = 16;
+const SNAP_PX_BASE_MOBILE  = 22;
+
+// Nombre especial (bloquea hasta completarlo)
 const EXAMPLE_TITLE = "Ejemplo.";
 
-// ====== OVERRIDES OPCIONALES (si quieres forzar una URL concreta) ======
+// ====== OVERRIDES OPCIONALES (forzar una bandera de Commons) ======
 const FLAG_BY_TITLE = {
   // "Bogotá, D.C.": commons("Flag of Bogotá.svg"),
 };
@@ -26,7 +35,7 @@ const FIXED_ORDER = [
   "Cauca","Nariño","Chocó","Guainía","Tolima","Caquetá","Huila","Putumayo","Amazonas",
   "Bolívar","Valle del Cauca","Sucre","Atlántico","Cesar","La Guajira","Magdalena",
   "Arauca","Norte de Santander","Casanare","Guaviare","Meta","Vaupés","Vichada",
-  "Antioquia","Córdoba","Boyacá","Santander","Caldas","Cundinamarca","Bogotá, D.C.","Risaralda",
+  "Antioquia","Córdoba","Boyacá","Santander","Caldas","Cundinamarca","Bogotá, D.C.","Risaralda"
 ];
 
 // ====== TABLA OFICIAL (1..33) + 34 Ejemplo ======
@@ -99,7 +108,6 @@ const ALIAS_TO_CANON = (() => {
 const state = {
   items: [], svg: null, bg: null, score: 0, vb: null, world: null,
   listOrder: [], tileByTitle: new Map(),
-  exampleAlertShown: false,
   howtoShown: false,
   correctCount: 0,
   errorCount: 0,
@@ -110,7 +118,7 @@ const state = {
 
 const $ = s => document.querySelector(s);
 
-// ===================== HUD (encabezado superior) =====================
+// ===================== HUD =====================
 function totalPlayable(){ return state.items.length; }
 function placedCount(){ return state.items.filter(it => it.placed).length; }
 
@@ -190,20 +198,41 @@ function getPieceCenterScreen(it){
   const R=Math.max(...rs.map(r=>r.right)),B=Math.max(...rs.map(r=>r.bottom));
   return {x:(L+R)/2,y:(T+B)/2};
 }
-
-// ---------- Helpers para EJEMPLO (solo bloqueo, sin más) ----------
-function getExampleItem(){ return state.items.find(it=>it.title === EXAMPLE_TITLE); }
-function isExamplePlaced(){ const ex=getExampleItem(); return ex ? !!ex.placed : true; }
-// No auto-crear ni auto-enfocar el ejemplo
-function focusExample(){ return false; }
-// Solo decide si se debe bloquear (el mensaje se muestra fuera)
-function blockIfExamplePending(candidateIt){
-  if (candidateIt && candidateIt.title === EXAMPLE_TITLE) return false; // permitir operar el Ejemplo
-  if (isExamplePlaced()) return false;                                  // si ya está, no bloquear
-  return true;                                                          // bloquear lo demás
+function getPieceScreenRect(it){
+  const rs=it.nodes.map(n=>n.getBoundingClientRect());
+  const L=Math.min(...rs.map(r=>r.left)), T=Math.min(...rs.map(r=>r.top));
+  const R=Math.max(...rs.map(r=>r.right)),B=Math.max(...rs.map(r=>r.bottom));
+  return {left:L, top:T, right:R, bottom:B, width:R-L, height:B-T};
+}
+function getTargetScreenRect(it){
+  const b=it.targetBBox;
+  const p1=worldPointToScreen(b.x,b.y);
+  const p2=worldPointToScreen(b.x+b.width, b.y+b.height);
+  const left=Math.min(p1.x,p2.x), right=Math.max(p1.x,p2.x);
+  const top=Math.min(p1.y,p2.y), bottom=Math.max(p1.y,p2.y);
+  return {left, top, right, bottom, width:right-left, height:bottom-top};
+}
+function rectsIntersectionArea(a,b){
+  const L=Math.max(a.left,b.left);
+  const R=Math.min(a.right,b.right);
+  const T=Math.max(a.top,b.top);
+  const B=Math.min(a.bottom,b.bottom);
+  const w=Math.max(0, R-L);
+  const h=Math.max(0, B-T);
+  return w*h;
 }
 
-// ===================== ALERTAS (ventanas emergentes) =====================
+// ---------- Helpers para EJEMPLO ----------
+function getExampleItem(){ return state.items.find(it=>it.title === EXAMPLE_TITLE); }
+function isExamplePlaced(){ const ex=getExampleItem(); return ex ? !!ex.placed : true; }
+/** Bloquea todo menos el Ejemplo si el Ejemplo no está aún colocado */
+function blockIfExamplePending(candidateIt){
+  if (candidateIt && candidateIt.title === EXAMPLE_TITLE) return false;
+  if (isExamplePlaced()) return false;
+  return true;
+}
+
+// ===================== ALERTAS =====================
 function showAlert(message){
   setTimeout(()=>{ try{ window.alert(message); }catch(_){ console.log("[ALERT]", message); } }, 30);
 }
@@ -226,23 +255,10 @@ function maybeShowCompletion(){
   }
 }
 
-// ============ RESPONSIVE: ajustar SVG al contenedor en resize ============
-function fitSvgToContainer(){
-  const board = $('#board');
-  if (!board || !state.svg) return;
-  // Asegura que el SVG ocupe el tamaño real del contenedor (evita desajustes de hit-test)
-  const w = board.clientWidth || board.offsetWidth || 0;
-  const h = board.clientHeight || board.offsetHeight || 0;
-  if (w > 0 && h > 0){
-    state.svg.setAttribute('width',  String(w));
-    state.svg.setAttribute('height', String(h));
-  }
-}
-
 // ===================== CARGA DEL SVG =====================
 async function loadSVG(){
   try{
-    const txt = await (await fetch(SVG_SOURCE)).text();
+    const txt = await (await fetch(SVG_SOURCE, {cache:"no-store"})).text();
     const src = new DOMParser().parseFromString(txt,'image/svg+xml');
     src.querySelectorAll('text').forEach(t=>t.remove());
 
@@ -256,8 +272,6 @@ async function loadSVG(){
 
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
     svg.setAttribute('viewBox', vb.join(' '));
-    svg.style.width = '100%';
-    svg.style.height = '100%';
     state.svg=svg;
 
     const world=document.createElementNS('http://www.w3.org/2000/svg','g');
@@ -327,7 +341,7 @@ async function loadSVG(){
     });
     state.items=arr;
 
-    // Fondo
+    // Fondo (sólo contornos)
     state.items.forEach(g=>{
       g.srcPaths.forEach(p=>{ const c=p.cloneNode(); c.setAttribute('fill','none'); state.bg.appendChild(c); });
     });
@@ -336,15 +350,11 @@ async function loadSVG(){
     $('#board').innerHTML=''; $('#board').appendChild(svg);
 
     renderSidebar();
-
-    // Ajusta SVG al contenedor (útil tras el primer layout)
-    fitSvgToContainer();
-
     enableDrag();
     updateTopHud();
   }catch(err){
     console.error(err);
-    $('#board').innerHTML='<div class="error">No se pudo cargar el mapa.</div>';
+    $('#board').innerHTML='<div class="error">No se pudo cargar el mapa.\n\n'+(err?.message||err)+'</div>';
   }
 }
 
@@ -374,20 +384,6 @@ function renderMiniPreview(svgMini, it){
     GT.appendChild(p);
   });
   svgMini.innerHTML=''; svgMini.appendChild(GT);
-}
-
-// ===================== Instrucciones bajo demanda =====================
-function showHowItWorks(){
-  if (state.howtoShown) return;
-  const msg =
-    "¿Cómo funciona?\n\n" +
-    "1) Pulsa 'Colocar' para crear una ficha por departamento.\n" +
-    "2) Acerca el cursor a la ficha y arrástrala.\n" +
-    "3) Suelta para validar el encaje.\n\n" +
-    "✔ Correcto   →  +200 y se bloquea\n" +
-    "✘  Incorrecto →  −100 y vuelve al lugar donde fue creada";
-  showAlert(msg);
-  state.howtoShown = true;
 }
 
 // ===================== Wikimedia Commons (banderas remotas) =====================
@@ -483,7 +479,6 @@ function renderSidebar(){
     div.appendChild(left); div.appendChild(btn); box.appendChild(div);
     state.tileByTitle.set(it.title, div);
 
-    // Bandera remota como fondo
     applyFlagBackground(div, it.title);
   });
 
@@ -523,7 +518,10 @@ function getPieceBBox(it){
 }
 function setTransform(n,tx,ty){ n.setAttribute('transform',`matrix(1 0 0 1 ${tx} ${ty})`); }
 function placeInSpawnColumn(it, listIndex){
-  const vb=state.vb, panelX=vb.x+vb.w-PANEL_WORLD_W+SPAWN_COL_X_PAD;
+  const vb=state.vb;
+  const isNarrow = window.matchMedia("(max-width: 720px)").matches;
+  // En móviles, spawnear a ~80% del ancho del mapa (no dependemos de sidebar)
+  const panelX = isNarrow ? (vb.x + vb.w*0.80) : (vb.x+vb.w-PANEL_WORLD_W+SPAWN_COL_X_PAD);
   const anchorY=vb.y+vb.h*SPAWN_ANCHOR_Y_FRAC;
   const jitter=(typeof listIndex==='number'?listIndex:0)*SPAWN_JITTER_PX;
   const bb=getPieceBBox(it); const curCX=bb.x+bb.width/2, curCY=bb.y+bb.height/2;
@@ -534,42 +532,67 @@ function updateLabel(it){
   it.label.setAttribute('x', bb.x+bb.width/2); it.label.setAttribute('y', bb.y+bb.height/2);
 }
 
+function deviceSnapBase(){
+  const isNarrow = window.matchMedia("(max-width: 720px)").matches;
+  return isNarrow ? SNAP_PX_BASE_MOBILE : SNAP_PX_BASE_DESKTOP;
+}
+
+// Tamaño objetivo (diagonal en px de pantalla) para calibrar tolerancias
 function targetDiagScreen(it){
   const b=it.targetBBox, s1=worldPointToScreen(b.x,b.y), s2=worldPointToScreen(b.x+b.width,b.y+b.height);
   return Math.hypot(s2.x-s1.x, s2.y-s1.y);
 }
+// Radio de snap adaptativo por tamaño de pieza
 function snapRadiusFor(it){
-  const d=targetDiagScreen(it);
-  if(d<60) return 56;
-  if(d<100) return 40;
-  if(d<160) return 28;
-  return 24;
+  const base = deviceSnapBase();
+  const d = targetDiagScreen(it);
+  let k;
+  if(d<60) k = base + 40;
+  else if(d<100) k = base + 28;
+  else if(d<160) k = base + 18;
+  else k = base + 12;
+  // Ajuste por densidad de pixeles
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  return Math.round(k * Math.min(1.25, dpr));
 }
 
-// === Encaje ROBUSTO: muestreo 5x5 dentro del bbox objetivo ===
-function coversTargetArea(current, targetBBox){
-  const COLS = 5, ROWS = 5;
-  const samples = [];
+/**
+ * ¿Cubre el área objetivo?
+ * - Rejilla de puntos en la caja objetivo (pantalla).
+ * - Si algún punto cae dentro del relleno de la pieza → true.
+ * - Fallback: intersección de rectángulos en pantalla > umbral.
+ */
+function coversTargetArea(current){
+  const tgtRect = getTargetScreenRect(current);
+  const pieceRect = getPieceScreenRect(current);
 
-  for (let i = 1; i <= COLS; i++){
-    const fx = i / (COLS + 1);
-    for (let j = 1; j <= ROWS; j++){
-      const fy = j / (ROWS + 1);
-      const wx = targetBBox.x + targetBBox.width  * fx;
-      const wy = targetBBox.y + targetBBox.height * fy;
-      const s  = worldPointToScreen(wx, wy);
-      samples.push({x: s.x, y: s.y});
+  // 1) Rejilla de muestreo
+  const diag = Math.hypot(tgtRect.width, tgtRect.height);
+  const step = Math.max(6, Math.min(20, Math.round(diag / 8)));
+  const cols = Math.max(3, Math.min(8, Math.round(tgtRect.width / step)));
+  const rows = Math.max(3, Math.min(8, Math.round(tgtRect.height / step)));
+  const offX = tgtRect.width/(cols+1);
+  const offY = tgtRect.height/(rows+1);
+
+  for(let i=1;i<=cols;i++){
+    for(let j=1;j<=rows;j++){
+      const sx = tgtRect.left + i*offX;
+      const sy = tgtRect.top  + j*offY;
+      for(const n of current.nodes){
+        if(!n.isPointInFill) continue;
+        const inv=n.getScreenCTM().inverse();
+        const p=_pt(sx,sy).matrixTransform(inv);
+        if(n.isPointInFill(p)) { return true; }
+      }
     }
   }
 
-  for (const {x, y} of samples){
-    for (const n of current.nodes){
-      if (!n.isPointInFill) continue;
-      const inv = n.getScreenCTM().inverse();
-      const p   = _pt(x, y).matrixTransform(inv);
-      if (n.isPointInFill(p)) return true;
-    }
-  }
+  // 2) Fallback: intersección de rectángulos en pantalla
+  const inter = rectsIntersectionArea(tgtRect, pieceRect);
+  const tgtArea = Math.max(1, tgtRect.width * tgtRect.height);
+  const ratio = inter / tgtArea;
+  if (ratio >= 0.12) return true;
+
   return false;
 }
 
@@ -580,6 +603,10 @@ function enableDrag(){
 
   state.world.addEventListener('pointerdown', e=>{
     const path=e.target.closest('path.leaflet-path-draggable'); if(!path) return;
+
+    // Evita scroll accidental en móviles al iniciar arrastre
+    e.preventDefault();
+
     const rec=state.items.find(it=>it.nodes.includes(path)); if(!rec||rec.placed) return;
 
     // Bloqueo si el Ejemplo no está completo (salvo el propio Ejemplo)
@@ -589,15 +616,24 @@ function enableDrag(){
     }
 
     current=rec; start=toSVG(e);
-    base=rec.nodes.map(n=>{ const m=n.transform.baseVal.consolidate(); return m?m.matrix:state.world.createSVGMatrix(); });
-    rec.nodes.forEach(n=>n.setPointerCapture(e.pointerId)); focusPiece(rec);
-  });
+    base=rec.nodes.map(n=>{
+      const m=n.transform.baseVal.consolidate();
+      return m?m.matrix:state.world.createSVGMatrix();
+    });
+
+    try{ rec.nodes.forEach(n=>n.setPointerCapture?.(e.pointerId)); }catch(_){}
+    focusPiece(rec);
+  }, {passive:false});
 
   state.world.addEventListener('pointermove', e=>{
-    if(!current) return; const p=toSVG(e), dx=p.x-start.x, dy=p.y-start.y;
-    current.nodes.forEach((n,i)=>{ const m=base[i]; n.setAttribute('transform',`matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e+dx} ${m.f+dy})`); });
+    if(!current) return;
+    const p=toSVG(e), dx=p.x-start.x, dy=p.y-start.y;
+    current.nodes.forEach((n,i)=>{
+      const m=base[i];
+      n.setAttribute('transform',`matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e+dx} ${m.f+dy})`);
+    });
     updateLabel(current);
-  });
+  }, {passive:true});
 
   state.world.addEventListener('pointerup', e=>{
     if(!current) return;
@@ -605,19 +641,22 @@ function enableDrag(){
 
     const curS=getPieceCenterScreen(current);
     const tgtS=worldPointToScreen(current.targetCX,current.targetCY);
+
     const dxS=tgtS.x-curS.x, dyS=tgtS.y-curS.y;
 
-    const tol=Math.max(SNAP_PX_BASE, snapRadiusFor(current));
-    const near=Math.hypot(dxS,dyS)<tol;
+    const tol = snapRadiusFor(current);
+    const near = Math.hypot(dxS,dyS) < tol;
 
-    // ¡Nuevo! usa bbox objetivo para superposición (robusto)
-    const overlap=coversTargetArea(current, current.targetBBox);
+    // Comprobación robusta de cobertura
+    const overlap = coversTargetArea(current);
 
     if(near && overlap){
+      // Alinear con el centro objetivo (en espacio mundo)
       const {dx,dy}=screenDeltaToWorldDelta(dxS,dyS);
       current.nodes.forEach(n=>{
-        const m=n.transform.baseVal.consolidate(); const base=m?m.matrix:state.world.createSVGMatrix();
-        n.setAttribute('transform',`matrix(${base.a} ${base.b} ${base.c} ${base.d} ${base.e+dx} ${base.f+dy})`);
+        const m=n.transform.baseVal.consolidate();
+        const baseM=m?m.matrix:state.world.createSVGMatrix();
+        n.setAttribute('transform',`matrix(${baseM.a} ${baseM.b} ${baseM.c} ${baseM.d} ${baseM.e+dx} ${baseM.f+dy})`);
         n.setAttribute('class','piece placed');
       });
       current.placed=true;
@@ -625,10 +664,6 @@ function enableDrag(){
       addScore(GOOD);
 
       try{ state.sndGood && (state.sndGood.currentTime=0, state.sndGood.play()); }catch(_){}
-
-      if (current.title === "Bogotá, D.C.") {
-        showAlert("Bogotá, D.C. no es un departamento; es la capital de Colombia (Distrito Capital).");
-      }
 
       const card = state.tileByTitle.get(current.title);
       if (card) card.classList.add('done');
@@ -649,7 +684,7 @@ function enableDrag(){
     updateTopHud();
     updateLabel(current);
     current=null; start=null; base=null;
-  });
+  }, {passive:true});
 }
 
 // ===================== FILTRO DE LISTA =====================
@@ -664,7 +699,19 @@ function onFilterChange(e){
 // ===================== BOTONES / INICIO =====================
 window.addEventListener('DOMContentLoaded', ()=>{
   const howBtn = $('#howBtn');
-  if (howBtn) howBtn.onclick = showHowItWorks;
+  if (howBtn) howBtn.onclick = ()=>{
+    if (state.howtoShown) return;
+    const msg =
+      "¿Cómo funciona?\n\n" +
+      "1) Pulsa 'Colocar' para crear una ficha por departamento.\n" +
+      "2) Arrástrala sobre el mapa.\n" +
+      "3) Suelta para validar el encaje.\n\n" +
+      "✔ Correcto   →  +200 y se bloquea\n" +
+      "✘ Incorrecto →  −100 y vuelve a su columna.\n\n" +
+      "Nota: Debes completar primero 'Ejemplo.' para desbloquear los demás.";
+    showAlert(msg);
+    state.howtoShown = true;
+  };
 
   const listWrap = document.querySelector('.list');
   if (listWrap) { [...listWrap.querySelectorAll('.hint')].forEach(n => n.remove()); }
@@ -676,14 +723,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
   if (resultsBtn) resultsBtn.onclick = showResults;
 
   const filterInput = $('#filterInput');
-  if (filterInput) filterInput.addEventListener('input', onFilterChange);
+  if (filterInput) filterInput.addEventListener('input', onFilterChange, {passive:true});
 
   state.sndGood = document.getElementById('soundGood');
   state.sndBad  = document.getElementById('soundBad');
 
   loadSVG();
 });
-
-// Re-ajusta el tamaño del SVG al cambiar tamaño/orientación (móvil/tablet/pc)
-window.addEventListener('resize',  fitSvgToContainer, {passive:true});
-window.addEventListener('orientationchange', fitSvgToContainer, {passive:true});
